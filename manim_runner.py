@@ -52,7 +52,7 @@ def generate_animation(code: str) -> str:
         f.write(cleaned_code)
 
     # Try to extract the class name from the code
-    class_match = re.search(r"class\s+(\w+)$begin:math:text$Scene$end:math:text$:", cleaned_code)
+    class_match = re.search(r"class\s+(\w+)\(.*Scene.*\):", cleaned_code)
     scene_name = class_match.group(1) if class_match else "Scene"
 
     # Run the Manim command to generate the video
@@ -62,10 +62,28 @@ def generate_animation(code: str) -> str:
             python_file,
             scene_name,
             "-o", video_file,
-            "-qk"  # qk = quick render
-        ], check=True)
+            "--media_dir", "videos",
+            "-ql"  # ql = low quality for faster rendering
+        ], check=True, capture_output=True, text=True)
+        
+        # Manim creates the video in media/videos/[filename]/[quality]/[video_file]
+        # We need to move it to our desired location
+        actual_video_path = os.path.join("media", "videos", python_file.replace(".py", ""), "480p15", video_file)
+        if os.path.exists(actual_video_path):
+            import shutil
+            shutil.move(actual_video_path, video_path)
+        else:
+            # Fallback: find the generated video
+            for root, dirs, files in os.walk("media"):
+                for file in files:
+                    if file.endswith(".mp4"):
+                        shutil.move(os.path.join(root, file), video_path)
+                        break
+                        
     except subprocess.CalledProcessError as e:
         print(f"[ERROR] Manim failed: {e}")
+        print(f"[ERROR] Command output: {e.stdout}")
+        print(f"[ERROR] Command error: {e.stderr}")
         raise e
     finally:
         if os.path.exists(python_file):
